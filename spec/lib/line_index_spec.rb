@@ -73,7 +73,7 @@ RSpec.describe Salsify::LineIndex do
         expect(index.get_line(2)).to eq('Line 2')
         expect(index.get_line(3)).to eq('Line 3')
         expect(index.get_line(4)).to eq('Line 4 with more content')
-        expect(index.get_line(5)).to eq('')  # Empty line
+        expect(index.get_line(5)).to eq('') # Empty line
         expect(index.get_line(6)).to eq('Line 6 after empty line')
       end
     end
@@ -114,7 +114,7 @@ RSpec.describe Salsify::LineIndex do
       index_time = Time.now - start_time
 
       expect(index.line_count).to eq(10_000)
-      expect(index_time).to be < 1.0  # Should index 10k lines in under 1 second
+      expect(index_time).to be < 1.0 # Should index 10k lines in under 1 second
 
       # Test random access performance
       access_start = Time.now
@@ -125,7 +125,7 @@ RSpec.describe Salsify::LineIndex do
       end
       access_time = Time.now - access_start
 
-      expect(access_time).to be < 0.1  # 100 random accesses in under 0.1 seconds
+      expect(access_time).to be < 0.1 # 100 random accesses in under 0.1 seconds
     end
   end
 
@@ -162,8 +162,8 @@ RSpec.describe Salsify::LineIndex do
       it 'preserves special characters' do
         index = described_class.new(special_file.path)
         expect(index.get_line(1)).to eq("Line with\ttab")
-        expect(index.get_line(2)).to eq("Line with spaces   ")
-        expect(index.get_line(3)).to eq("Line with!@#$%^&*()")
+        expect(index.get_line(2)).to eq('Line with spaces   ')
+        expect(index.get_line(3)).to eq("Line with!@\#$%^&*()")
       end
     end
   end

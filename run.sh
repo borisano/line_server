@@ -34,5 +34,5 @@ echo ""
 # Export the filename for the application to use
 export SALSIFY_FILE_PATH="$FILENAME"
 
-# Start the server with Puma
-bundle exec puma app.rb -p 4567 -t 8:32 -w 2
+# Start the server with Ruby directly instead of Puma directly
+bundle exec ruby app.rb

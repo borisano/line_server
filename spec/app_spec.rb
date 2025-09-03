@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative '../spec_helper'
-require_relative '../../app'
+require_relative 'spec_helper'
+require_relative '../app'
 require 'tempfile'
 
 RSpec.describe SalsifyLineServer do
@@ -17,32 +17,28 @@ RSpec.describe SalsifyLineServer do
   before do
     temp_file.write(test_content)
     temp_file.close
-    ENV['SALSIFY_FILE_PATH'] = temp_file.path
-    
-    # Reset the class variable to force reinitialization
-    SalsifyLineServer.class_variable_set(:@@line_index, nil) if SalsifyLineServer.class_variable_defined?(:@@line_index)
-    
-    # Trigger configuration block
+
+    # Initialize the line index for testing
     silence_output do
-      SalsifyLineServer.configure
+      SalsifyLineServer.initialize_index(temp_file.path)
     end
   end
 
   after do
     temp_file.unlink
-    ENV.delete('SALSIFY_FILE_PATH')
   end
 
   describe 'GET /' do
     it 'returns server status' do
       get '/'
-      
+
       expect(last_response).to be_ok
       expect(last_response.content_type).to include('application/json')
-      
+
       response_data = JSON.parse(last_response.body)
       expect(response_data['status']).to eq('ok')
       expect(response_data['lines']).to eq(4)
+      expect(response_data['file']).to be_nil # Not set in test environment
       expect(response_data['message']).to include('Salsify Line Server')
     end
   end
@@ -51,7 +47,7 @@ RSpec.describe SalsifyLineServer do
     context 'with valid line numbers' do
       it 'returns the correct line for line 1' do
         get '/lines/1'
-        
+
         expect(last_response).to be_ok
         expect(last_response.content_type).to include('text/plain')
         expect(last_response.body).to eq('First line')
@@ -59,14 +55,14 @@ RSpec.describe SalsifyLineServer do
 
       it 'returns the correct line for line 2' do
         get '/lines/2'
-        
+
         expect(last_response).to be_ok
         expect(last_response.body).to eq('Second line')
       end
 
       it 'returns the correct line for line 4' do
         get '/lines/4'
-        
+
         expect(last_response).to be_ok
         expect(last_response.body).to eq('Fourth line')
       end
@@ -75,38 +71,38 @@ RSpec.describe SalsifyLineServer do
     context 'with invalid line numbers' do
       it 'returns 400 for line number 0' do
         get '/lines/0'
-        
+
         expect(last_response.status).to eq(400)
         expect(last_response.content_type).to include('application/json')
-        
+
         response_data = JSON.parse(last_response.body)
         expect(response_data['error']).to eq('Line number must be positive')
       end
 
       it 'returns 400 for negative line numbers' do
         get '/lines/-1'
-        
+
         expect(last_response.status).to eq(400)
-        
+
         response_data = JSON.parse(last_response.body)
         expect(response_data['error']).to eq('Line number must be positive')
       end
 
       it 'returns 413 for line numbers beyond file end' do
         get '/lines/5'
-        
+
         expect(last_response.status).to eq(413)
         expect(last_response.content_type).to include('application/json')
-        
+
         response_data = JSON.parse(last_response.body)
         expect(response_data['error']).to eq('Line index beyond end of file')
       end
 
       it 'returns 413 for very large line numbers' do
         get '/lines/999999'
-        
+
         expect(last_response.status).to eq(413)
-        
+
         response_data = JSON.parse(last_response.body)
         expect(response_data['error']).to eq('Line index beyond end of file')
       end
@@ -115,9 +111,9 @@ RSpec.describe SalsifyLineServer do
     context 'with non-numeric line numbers' do
       it 'treats non-numeric as 0 and returns 400' do
         get '/lines/abc'
-        
+
         expect(last_response.status).to eq(400)
-        
+
         response_data = JSON.parse(last_response.body)
         expect(response_data['error']).to eq('Line number must be positive')
       end
@@ -127,10 +123,10 @@ RSpec.describe SalsifyLineServer do
   describe 'error handling' do
     it 'returns 404 for unknown routes' do
       get '/unknown'
-      
+
       expect(last_response.status).to eq(404)
       expect(last_response.content_type).to include('application/json')
-      
+
       response_data = JSON.parse(last_response.body)
       expect(response_data['error']).to eq('Not found. Use GET /lines/<line_number>')
     end
@@ -145,9 +141,9 @@ RSpec.describe SalsifyLineServer do
       # Simulate 20 concurrent requests
       20.times do |i|
         threads << Thread.new do
-          line_num = (i % 4) + 1  # Cycle through lines 1-4
+          line_num = (i % 4) + 1 # Cycle through lines 1-4
           response = get "/lines/#{line_num}"
-          
+
           mutex.synchronize do
             results << {
               status: response.status,

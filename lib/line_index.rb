@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'fiddle'
-
 module Salsify
   # High-performance file line indexer using memory-mapped I/O
   # Pre-builds an index of byte offsets for O(1) line access
@@ -16,7 +14,7 @@ module Salsify
       @line_offsets = []
       @file_size = File.size(@file_path)
       @line_count = 0
-      
+
       build_index
     end
 
@@ -27,10 +25,10 @@ module Salsify
 
       line_index = line_number - 1
       start_offset = @line_offsets[line_index]
-      
+
       # Calculate end offset (next line start or EOF)
       end_offset = if line_index + 1 < @line_count
-                     @line_offsets[line_index + 1] - 1  # Subtract 1 to exclude newline
+                     @line_offsets[line_index + 1] - 1 # Subtract 1 to exclude newline
                    else
                      @file_size
                    end
@@ -62,12 +60,12 @@ module Salsify
         @line_count = 1
 
         # Read file in chunks for memory efficiency
-        buffer_size = 64 * 1024  # 64KB chunks
+        buffer_size = 64 * 1024 # 64KB chunks
         position = 0
 
         while (chunk = file.read(buffer_size))
           chunk.each_byte.with_index do |byte, index|
-            if byte == 10  # ASCII newline character (\n)
+            if byte == 10 # ASCII newline character (\n)
               next_line_start = position + index + 1
               # Only add if not at end of file
               if next_line_start < @file_size
