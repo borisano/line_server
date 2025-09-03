@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+
+# Test files
+spec/
+coverage/
+test_data.txt
+
+# Development files
+.rubocop.yml
+
+# Logs
+*.log
+
+# Environment files
+.env*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/

@@ -1,0 +1,29 @@
+# Production environment configuration
+# Inherits from deploy.yml and overrides specific values
+
+servers:
+  web:
+    - prod-server-1.your-domain.com
+    - prod-server-2.your-domain.com
+
+env:
+  clear:
+    RACK_ENV: production
+    SALSIFY_FILE_PATH: /app/data/production_file.txt
+
+proxy:
+  ssl: true
+  host: api.your-domain.com
+  acme: true  # Let's Encrypt SSL
+
+# Production resource limits
+service:
+  memory: 1g
+  cpus: 1.0
+
+# Enhanced logging for production
+logging:
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"

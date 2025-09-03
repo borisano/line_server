@@ -1,0 +1,89 @@
+# Kamal deployment configuration for Salsify Line Server
+# Name of your application
+service: salsify-line-server
+
+# Docker image configuration
+image: salsify-line-server
+
+# Registry configuration (customize for your registry)
+registry:
+  # Example for Docker Hub
+  # server: docker.io
+  # username: your-username
+  
+  # Example for GitHub Container Registry
+  # server: ghcr.io
+  # username: your-github-username
+
+# Servers to deploy to
+servers:
+  web:
+    # Add your server IPs or hostnames
+    - 192.168.1.100
+    # - your-server.com
+    
+  # Optional: separate servers for different roles
+  # job:
+  #   - 192.168.1.101
+
+# SSH configuration
+ssh:
+  user: deploy
+  # keys_only: true
+  # keys: [~/.ssh/id_ed25519]
+
+# Environment variables
+env:
+  clear:
+    RACK_ENV: production
+    # SALSIFY_FILE_PATH: /app/data/production_file.txt
+  secret:
+    # Add sensitive environment variables here
+    # SECRET_KEY_BASE: your-secret-key
+
+# Volume mounts for data files
+volumes:
+  - "/opt/salsify-data:/app/data"
+
+# Service configuration
+service:
+  port: 4567
+  # Health check endpoint
+  healthcheck:
+    path: /
+    port: 4567
+    max_attempts: 10
+
+# Load balancer/proxy configuration
+proxy:
+  ssl: false  # Set to true if using SSL
+  host: your-domain.com
+  # acme: true  # Enable for Let's Encrypt SSL
+
+# Asset configuration (not needed for this simple API)
+# asset_path: /app/public
+
+# Builder configuration
+builder:
+  multiarch: false  # Set to true if deploying to different architectures
+
+# Logging
+logging:
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Aliases for common commands
+aliases:
+  console: app exec --interactive --reuse "bundle exec irb"
+  shell: app exec --interactive --reuse "/bin/sh"
+  logs: app logs --follow
+  
+# Accessories (additional services like databases, redis, etc.)
+# accessories:
+#   redis:
+#     image: redis:7
+#     port: 6379
+#     volumes:
+#       - /var/lib/redis:/data
