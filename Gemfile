@@ -4,6 +4,7 @@ source 'https://rubygems.org'
 
 ruby '~> 3.2'
 
+gem 'dotenv', '~> 2.8'
 gem 'json', '~> 2.7'
 gem 'puma', '~> 6.4'
 gem 'rackup', '~> 2.2'

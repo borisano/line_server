@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'dotenv/load'
 require 'sinatra'
 require 'json'
 require_relative 'lib/line_index'
@@ -7,9 +8,9 @@ require_relative 'lib/line_index'
 # Salsify Line Server - High-performance file line serving
 class SalsifyLineServer < Sinatra::Base
   configure do
-    set :port, 4567
-    set :bind, '0.0.0.0'
-    set :logging, true
+    set :port, ENV.fetch('PORT', 4567).to_i
+    set :bind, ENV.fetch('BIND', '0.0.0.0')
+    set :logging, ENV.fetch('LOG_LEVEL', 'info') != 'error'
 
     # Initialize the line index on startup (skip in test environment)
     unless ENV['RACK_ENV'] == 'test'

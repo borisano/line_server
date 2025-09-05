@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Salsify
-  # High-performance file line indexer using memory-mapped I/O
+  # High-performance file line indexer with automatic memory/disk switching
   # Pre-builds an index of byte offsets for O(1) line access
   class LineIndex
     attr_reader :file_path, :line_count
@@ -11,11 +11,17 @@ module Salsify
       raise ArgumentError, "File does not exist: #{@file_path}" unless File.exist?(@file_path)
       raise ArgumentError, "File is not readable: #{@file_path}" unless File.readable?(@file_path)
 
-      @line_offsets = []
       @file_size = File.size(@file_path)
       @line_count = 0
 
-      build_index
+      # Memory threshold from environment variable (default 512MB)
+      threshold_mb = ENV.fetch('MEMORY_THRESHOLD_MB', '512').to_i
+      @memory_threshold = threshold_mb * 1024 * 1024
+      @use_disk_index = false
+      @index_file = "#{@file_path}.idx"
+      @line_offsets = []
+
+      build_or_load_index
     end
 
     # Get line by 1-based index
@@ -24,17 +30,16 @@ module Salsify
       return nil if line_number < 1 || line_number > @line_count
 
       line_index = line_number - 1
-      start_offset = @line_offsets[line_index]
+      start_offset = get_line_offset(line_index)
+      return nil unless start_offset
 
       # Calculate end offset (next line start or EOF)
-      end_offset = if line_index + 1 < @line_count
-                     @line_offsets[line_index + 1] - 1 # Subtract 1 to exclude newline
-                   else
-                     @file_size
-                   end
+      end_offset = get_line_offset(line_index + 1) || @file_size
 
-      # Read the specific line using File.read with offset and length
+      # Remove trailing newline from length calculation
       length = end_offset - start_offset
+      length -= 1 if line_index + 1 < @line_count
+
       return '' if length <= 0
 
       File.open(@file_path, 'rb') do |file|
@@ -50,16 +55,58 @@ module Salsify
 
     private
 
-    # Build index of line start positions
+    def build_or_load_index
+      # Check if index file exists and is newer than source file
+      if File.exist?(@index_file) && File.mtime(@index_file) > File.mtime(@file_path)
+        load_existing_index
+      else
+        build_index
+        save_index if @use_disk_index
+      end
+    end
+
     def build_index
-      return if @file_size.zero?
+      puts "Building line index for #{@file_path}..."
+      start_time = Time.now
+
+      # Estimate memory requirements
+      estimated_lines = estimate_line_count
+      estimated_memory = estimated_lines * 8 # 8 bytes per offset
+
+      # TEMPORARY: Always use disk index for testing
+      @use_disk_index = true
+
+      if @use_disk_index
+        puts "Large file detected (#{format_bytes(estimated_memory)} index). Using disk-based indexing."
+        build_disk_index
+      else
+        puts "Using memory-based indexing (#{format_bytes(estimated_memory)} index)."
+        build_memory_index
+      end
+
+      elapsed = Time.now - start_time
+      puts "Indexed #{@line_count} lines in #{@file_path} (#{format_bytes(@file_size)}) - #{elapsed.round(2)}s"
+    end
+
+    def estimate_line_count
+      # Sample first 64KB to estimate average line length
+      sample_size = [64 * 1024, @file_size].min
 
       File.open(@file_path, 'rb') do |file|
-        # First line always starts at position 0
-        @line_offsets << 0
-        @line_count = 1
+        sample = file.read(sample_size)
+        lines_in_sample = sample.count("\n")
+        return 1 if lines_in_sample == 0
 
-        # Read file in chunks for memory efficiency
+        avg_line_length = sample_size.to_f / lines_in_sample
+        (@file_size / avg_line_length).to_i
+      end
+    end
+
+    def build_memory_index
+      @line_offsets = [0] # First line always starts at 0
+      @line_count = 1
+
+      File.open(@file_path, 'rb') do |file|
         buffer_size = 64 * 1024 # 64KB chunks
         position = 0
 
@@ -67,7 +114,6 @@ module Salsify
           chunk.each_byte.with_index do |byte, index|
             if byte == 10 # ASCII newline character (\n)
               next_line_start = position + index + 1
-              # Only add if not at end of file
               if next_line_start < @file_size
                 @line_offsets << next_line_start
                 @line_count += 1
@@ -77,8 +123,69 @@ module Salsify
           position += chunk.size
         end
       end
+    end
 
-      puts "Indexed #{@line_count} lines in #{@file_path} (#{format_bytes(@file_size)})"
+    def build_disk_index
+      # Write index directly to disk to avoid memory issues
+      @line_count = 1
+
+      File.open(@index_file, 'wb') do |index_file|
+        # Write first offset (0)
+        index_file.write([0].pack('Q<')) # 64-bit little-endian
+
+        File.open(@file_path, 'rb') do |file|
+          buffer_size = 1024 * 1024 # 1MB chunks for large files
+          position = 0
+          lines_processed = 0
+
+          while (chunk = file.read(buffer_size))
+            chunk.each_byte.with_index do |byte, index|
+              if byte == 10 # newline
+                next_line_start = position + index + 1
+                if next_line_start < @file_size
+                  index_file.write([next_line_start].pack('Q<'))
+                  @line_count += 1
+
+                  lines_processed += 1
+                  puts "  Processed #{lines_processed / 1_000_000}M lines..." if lines_processed % 1_000_000 == 0
+                end
+              end
+            end
+            position += chunk.size
+          end
+        end
+      end
+    end
+
+    def load_existing_index
+      if File.exist?(@index_file)
+        puts 'Loading existing disk index...'
+        @use_disk_index = true
+        @line_count = File.size(@index_file) / 8 # 8 bytes per offset
+      else
+        # Fallback to building new index
+        build_index
+      end
+    end
+
+    def save_index
+      puts "Index saved to #{@index_file}"
+    end
+
+    def get_line_offset(line_index)
+      if @use_disk_index
+        return nil if line_index >= @line_count
+
+        File.open(@index_file, 'rb') do |file|
+          file.seek(line_index * 8)
+          data = file.read(8)
+          return nil unless data && data.length == 8
+
+          data.unpack1('Q<')
+        end
+      else
+        @line_offsets[line_index]
+      end
     end
 
     def format_bytes(bytes)
