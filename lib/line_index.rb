@@ -17,7 +17,10 @@ module Salsify
       # Memory threshold from environment variable (default 512MB)
       threshold_mb = ENV.fetch('MEMORY_THRESHOLD_MB', '512').to_i
       @memory_threshold = threshold_mb * 1024 * 1024
-      @use_disk_index = false
+
+      # Force disk index if environment variable is set
+      force_disk = ENV.fetch('FORCE_DISK_INDEX', 'false').downcase == 'true'
+      @use_disk_index = force_disk
       @index_file = "#{@file_path}.idx"
       @line_offsets = []
 
@@ -69,17 +72,30 @@ module Salsify
       puts "Building line index for #{@file_path}..."
       start_time = Time.now
 
-      # Estimate memory requirements
-      estimated_lines = estimate_line_count
-      estimated_memory = estimated_lines * 8 # 8 bytes per offset
+      # Estimate memory requirements unless forced to use disk
+      unless @use_disk_index
+        estimated_lines = estimate_line_count
+        estimated_memory = estimated_lines * 8 # 8 bytes per offset
 
-      # TEMPORARY: Always use disk index for testing
-      @use_disk_index = true
+        # Switch to disk index if estimated memory exceeds threshold
+        @use_disk_index = true if estimated_memory > @memory_threshold
+      end
 
       if @use_disk_index
-        puts "Large file detected (#{format_bytes(estimated_memory)} index). Using disk-based indexing."
+        if ENV.fetch('FORCE_DISK_INDEX', 'false').downcase == 'true'
+          puts 'Forced disk-based indexing enabled.'
+        elsif @file_size > 10 * 1024 * 1024 * 1024
+          # For very large files, skip estimation and just indicate size-based decision
+          puts "Large file detected (#{format_bytes(@file_size)}). Using disk-based indexing." # > 10GB
+        else
+          estimated_lines = estimate_line_count
+          estimated_memory = estimated_lines * 8
+          puts "Large file detected (#{format_bytes(estimated_memory)} index). Using disk-based indexing."
+        end
         build_disk_index
       else
+        estimated_lines = estimate_line_count
+        estimated_memory = estimated_lines * 8
         puts "Using memory-based indexing (#{format_bytes(estimated_memory)} index)."
         build_memory_index
       end
@@ -97,13 +113,26 @@ module Salsify
         lines_in_sample = sample.count("\n")
         return 1 if lines_in_sample == 0
 
+        # Calculate average line length including newlines
         avg_line_length = sample_size.to_f / lines_in_sample
-        (@file_size / avg_line_length).to_i
+
+        # For very uniform files, be more conservative in estimation
+        estimated_lines = (@file_size / avg_line_length).to_i
+
+        # Cap the estimation to prevent ridiculous values
+        max_reasonable_lines = @file_size / 2 # Minimum 2 bytes per line
+        [estimated_lines, max_reasonable_lines].min
       end
     end
 
     def build_memory_index
-      @line_offsets = [0] # First line always starts at 0
+      @line_offsets = []
+      @line_count = 0
+
+      return if @file_size.zero? # Handle empty files
+
+      # Add first line offset
+      @line_offsets << 0
       @line_count = 1
 
       File.open(@file_path, 'rb') do |file|
@@ -127,11 +156,15 @@ module Salsify
 
     def build_disk_index
       # Write index directly to disk to avoid memory issues
-      @line_count = 1
+      @line_count = 0
 
       File.open(@index_file, 'wb') do |index_file|
-        # Write first offset (0)
-        index_file.write([0].pack('Q<')) # 64-bit little-endian
+        # Only write first offset if file is not empty
+        unless @file_size.zero?
+          # Write first offset (0)
+          index_file.write([0].pack('Q<')) # 64-bit little-endian
+          @line_count = 1
+        end
 
         File.open(@file_path, 'rb') do |file|
           buffer_size = 1024 * 1024 # 1MB chunks for large files

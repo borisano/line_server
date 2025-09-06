@@ -9,6 +9,7 @@ require 'rspec'
 require 'rack/test'
 require 'tempfile'
 require 'fileutils'
+require 'stringio'
 
 # Set up test environment
 ENV['RACK_ENV'] = 'test'
@@ -31,4 +32,16 @@ RSpec.configure do |config|
 
   config.order = :random
   Kernel.srand config.seed
+end
+
+# Helper method to silence output during tests
+def silence_output
+  original_stdout = $stdout
+  original_stderr = $stderr
+  $stdout = StringIO.new
+  $stderr = StringIO.new
+  yield
+ensure
+  $stdout = original_stdout
+  $stderr = original_stderr
 end

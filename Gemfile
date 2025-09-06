@@ -16,7 +16,3 @@ group :development, :test do
   gem 'rubocop', '~> 1.57'
   gem 'simplecov', '~> 0.22'
 end
-
-group :development do
-  gem 'kamal', '~> 1.0'
-end

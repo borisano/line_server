@@ -38,7 +38,7 @@ RSpec.describe SalsifyLineServer do
       response_data = JSON.parse(last_response.body)
       expect(response_data['status']).to eq('ok')
       expect(response_data['lines']).to eq(4)
-      expect(response_data['file']).to be_nil # Not set in test environment
+      expect(response_data['file']).to eq(temp_file.path) # File path from initialized index
       expect(response_data['message']).to include('Salsify Line Server')
     end
   end

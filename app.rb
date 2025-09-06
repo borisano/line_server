@@ -44,7 +44,7 @@ class SalsifyLineServer < Sinatra::Base
     content_type :json
     {
       status: 'ok',
-      file: ENV['SALSIFY_FILE_PATH'],
+      file: @@line_index.file_path,
       lines: @@line_index.line_count,
       message: 'Salsify Line Server is running'
     }.to_json

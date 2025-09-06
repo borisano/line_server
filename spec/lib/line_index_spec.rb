@@ -167,4 +167,85 @@ RSpec.describe Salsify::LineIndex do
       end
     end
   end
+
+  describe 'forced disk indexing' do
+    let(:small_file) { Tempfile.new('small_file') }
+    let(:small_content) { "Small line 1\nSmall line 2\nSmall line 3\nSmall line 4\n" }
+
+    before do
+      small_file.write(small_content)
+      small_file.close
+    end
+
+    after do
+      small_file.unlink
+      # Clean up any index files
+      index_file = "#{small_file.path}.idx"
+      File.delete(index_file) if File.exist?(index_file)
+    end
+
+    context 'when FORCE_DISK_INDEX is true' do
+      around do |example|
+        original_value = ENV['FORCE_DISK_INDEX']
+        ENV['FORCE_DISK_INDEX'] = 'true'
+        example.run
+        ENV['FORCE_DISK_INDEX'] = original_value
+      end
+
+      it 'uses disk-based indexing for small files' do
+        silence_output do
+          index = described_class.new(small_file.path)
+
+          # Verify index was created on disk
+          index_file = "#{small_file.path}.idx"
+          expect(File.exist?(index_file)).to be true
+
+          # Verify functionality
+          expect(index.line_count).to eq(4)
+          expect(index.get_line(1)).to eq('Small line 1')
+          expect(index.get_line(2)).to eq('Small line 2')
+          expect(index.get_line(3)).to eq('Small line 3')
+          expect(index.get_line(4)).to eq('Small line 4')
+          expect(index.get_line(5)).to be_nil
+        end
+      end
+
+      it 'reloads existing disk index on subsequent access' do
+        silence_output do
+          # Create index first time
+          index1 = described_class.new(small_file.path)
+          expect(index1.line_count).to eq(4)
+
+          # Create new instance - should load existing index
+          index2 = described_class.new(small_file.path)
+          expect(index2.line_count).to eq(4)
+          expect(index2.get_line(2)).to eq('Small line 2')
+        end
+      end
+    end
+
+    context 'when FORCE_DISK_INDEX is false' do
+      around do |example|
+        original_value = ENV['FORCE_DISK_INDEX']
+        ENV['FORCE_DISK_INDEX'] = 'false'
+        example.run
+        ENV['FORCE_DISK_INDEX'] = original_value
+      end
+
+      it 'uses memory-based indexing for small files' do
+        silence_output do
+          index = described_class.new(small_file.path)
+
+          # Verify no index file was created
+          index_file = "#{small_file.path}.idx"
+          expect(File.exist?(index_file)).to be false
+
+          # Verify functionality still works
+          expect(index.line_count).to eq(4)
+          expect(index.get_line(1)).to eq('Small line 1')
+          expect(index.get_line(4)).to eq('Small line 4')
+        end
+      end
+    end
+  end
 end
