@@ -111,3 +111,13 @@ docker run -p 4567:4567 -v /path/to/data:/app/data \
 ## Architecture
 
 Built with Ruby, Sinatra, and Puma for optimal performance.
+
+## What documentation, websites, papers, etc did you consult in doing this assignment?
+I googled different possible solutions for the problem, including StackOverflow, and investigated tools for creating efficiente cache
+
+## How long did you spend on this exercise? If you had unlimited more time to spend on this, how would you spend it and how would you prioritize each item?
+I spent about 10 hours total, however, for 50GB file I had to leave my PC on and leave, as file generation (not part of the assignment, but I haven't found a fitting 10-50GB text file in the internet)
+
+## If you were to critique your code, what would you have to say about it?
+I did my investigation and think I found a good solution for the problem, and I carefully tested my solution against different, quite large, data sets. However I just assumed this would be the beset solution, without actually checking it. A proper solution would involve implementation with different approaches, comparing results and choosing the best one.
+My code also involves a waiting time for cache to be created when starting with a fresh file, however I feel like it is a worthy trade off, as after the initial cache generation performance is blazingly fast. 
